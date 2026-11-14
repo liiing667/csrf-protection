@@ -17,7 +17,7 @@ test('Cookies', async t => {
   async function load () {
     const fastify = Fastify()
     await fastify.register(fastifyCookie)
-    await fastify.register(fastifyCsrf)
+    await fastify.register(fastifyCsrf, { allowUnsignedCookie: true })
     fastify.decorate('testType', 'fastify-cookie')
     return fastify
   }
@@ -184,7 +184,7 @@ test('csrf options', async () => {
 
   await Fastify()
     .register(fastifyCookie)
-    .register(fastifyCsrf, { csrfOpts })
+    .register(fastifyCsrf, { csrfOpts, allowUnsignedCookie: true })
 
   sinon.assert.calledWith(csrf, csrfOpts)
 })
@@ -201,7 +201,7 @@ const spyLogger = {
 
 test('logLevel options', async t => {
   async function load (logLevel) {
-    const opts = logLevel ? { logLevel } : {}
+    const opts = logLevel ? { logLevel, allowUnsignedCookie: true } : { allowUnsignedCookie: true }
     const fastify = Fastify({ loggerInstance: spyLogger })
     await fastify.register(fastifyCookie)
     await fastify.register(fastifyCsrf, opts)

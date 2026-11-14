@@ -46,13 +46,17 @@ If you use `@fastify/csrf-protection` with `@fastify/cookie`, the CSRF secret wi
 By default, the cookie used will be named `_csrf`, but you can rename it via the `cookieKey` option.
 When `cookieOpts` are provided, they **override** the default cookie options. Make sure you restore any of the default options which provide sensible and secure defaults.
 
-```js
-fastify.register(require('@fastify/cookie'))
-fastify.register(require('@fastify/csrf-protection'))
+The cookie mode implements the [signed double-submit cookie pattern](https://cheatsheetseries.owasp.org/cheatsheets/Cross-Site_Request_Forgery_Prevention_Cheat_Sheet.html#signed-double-submit-cookie-pattern).
+An unsigned `_csrf` cookie can be overwritten by a subdomain (or any party able to set cookies for the domain), which can then mint a matching token and bypass the protection.
+For this reason, the plugin **requires signed cookies** when used with `@fastify/cookie`: register `@fastify/cookie` with a `secret` and enable `cookieOpts.signed`.
 
-// if you want to sign cookies:
+```js
 fastify.register(require('@fastify/cookie'), { secret }) // See following section to ensure security
 fastify.register(require('@fastify/csrf-protection'), { cookieOpts: { signed: true } })
+
+// unsigned cookies are rejected at startup unless you explicitly accept the reduced security:
+fastify.register(require('@fastify/cookie'))
+fastify.register(require('@fastify/csrf-protection'), { allowUnsignedCookie: true })
 
 // generate a token
 fastify.route({
@@ -160,6 +164,7 @@ Apart from these safeguards, it is extremely important to [use HTTPS for your we
 | `sessionPlugin` |  The session plugin that you are using (if applicable).     |
 | `csrfOpts` |  The csrf options. See [@fastify/csrf](https://github.com/fastify/csrf).     |
 | `logLevel` | The log level for `fastify.csrfProtection` errors.     |
+| `allowUnsignedCookie` |  Cookie mode (`@fastify/cookie`) requires `cookieOpts.signed: true` by default. Set to `true` only if you cannot sign cookies and explicitly accept the weakened double-submit protection. Defaults to `false`. Has no effect with `@fastify/session` or `@fastify/secure-session`.     |
 
 ### `reply.generateCsrf([opts])`
 

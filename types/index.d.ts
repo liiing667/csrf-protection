@@ -34,6 +34,7 @@ declare namespace fastifyCsrfProtection {
     sessionKey?: string;
     getUserInfo?: (req: FastifyRequest) => string;
     getToken?: GetTokenFn;
+    allowUnsignedCookie?: boolean;
   }
 
   type RequiredCSRFHmac = Omit<CSRFOptions, 'hmacKey' | 'userInfo'> &

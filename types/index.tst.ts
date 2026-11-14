@@ -88,6 +88,8 @@ fastify.register(FastifyCsrfProtection, {
   csrfOpts: { userInfo: true, hmacKey: 'key' }
 })
 fastify.register(FastifyCsrfProtection, { sessionPlugin: '@fastify/cookie' })
+fastify.register(FastifyCsrfProtection, { allowUnsignedCookie: true })
+fastify.register(FastifyCsrfProtection, { allowUnsignedCookie: false })
 fastify.register(FastifyCsrfProtection, {
   csrfOpts: {},
   sessionPlugin: '@fastify/session'
@@ -101,3 +103,7 @@ fastify.register(FastifyCsrfProtection, {
   sessionPlugin: '@fastify/secure-session'
 })
 fastify.register(FastifyCsrfProtection, { logLevel: 'info' })
+
+expect(fastify.register).type.not.toBeCallableWith(FastifyCsrfProtection, {
+  allowUnsignedCookie: 'yes'
+})

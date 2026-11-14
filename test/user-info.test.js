@@ -15,6 +15,7 @@ test('Cookies with User-Info', async t => {
   const fastify = Fastify()
   await fastify.register(fastifyCookie)
   await fastify.register(fastifyCsrf, {
+    allowUnsignedCookie: true,
     getUserInfo (req) {
       return userInfoDB[req.body.username]
     },
@@ -179,6 +180,7 @@ test('Validate presence of hmac key with User-Info /1', async (t) => {
 
   await t.assert.rejects(new Promise((resolve, reject) => {
     fastify.register(fastifyCsrf, {
+      allowUnsignedCookie: true,
       getUserInfo (req) {
         return req.session.get('username')
       }
@@ -202,6 +204,7 @@ test('Validate presence of hmac key with User-Info /2', async (t) => {
 
   await t.assert.rejects(new Promise((resolve, reject) => {
     fastify.register(fastifyCsrf, {
+      allowUnsignedCookie: true,
       getUserInfo (req) {
         return req.session.get('username')
       },
@@ -227,6 +230,7 @@ test('Validate presence of hmac key with User-Info /3', async (t) => {
 
   await t.assert.rejects(new Promise((resolve, reject) => {
     fastify.register(fastifyCsrf, {
+      allowUnsignedCookie: true,
       getUserInfo (req) {
         return req.session.get('username')
       },
@@ -253,6 +257,7 @@ test('Validate presence of hmac key with User-Info /4', async (t) => {
 
   await t.assert.rejects(new Promise((resolve, reject) => {
     fastify.register(fastifyCsrf, {
+      allowUnsignedCookie: true,
       getUserInfo (req) {
         return req.session.get('username')
       },

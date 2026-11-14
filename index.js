@@ -15,6 +15,7 @@ const defaultOptions = {
   getToken: getTokenDefault,
   getUserInfo: getUserInfoDefault,
   sessionPlugin: '@fastify/cookie',
+  allowUnsignedCookie: false,
   logLevel: 'warn'
 }
 
@@ -26,6 +27,7 @@ async function fastifyCsrfProtection (fastify, opts) {
     getToken,
     getUserInfo,
     sessionPlugin,
+    allowUnsignedCookie,
     logLevel
   } = Object.assign({}, defaultOptions, opts)
 
@@ -37,6 +39,7 @@ async function fastifyCsrfProtection (fastify, opts) {
   assert(typeof getUserInfo === 'function', 'getUserInfo should be a function')
   assert(typeof cookieOpts === 'object', 'cookieOpts should be a object')
   assert(typeof logLevel === 'string', 'logLevel should be a string')
+  assert(typeof allowUnsignedCookie === 'boolean', 'allowUnsignedCookie should be a boolean')
   assert(
     ['@fastify/cookie', '@fastify/session', '@fastify/secure-session'].includes(sessionPlugin),
     "sessionPlugin should be one of the following: '@fastify/cookie', '@fastify/session', '@fastify/secure-session'"
@@ -53,6 +56,20 @@ async function fastifyCsrfProtection (fastify, opts) {
   const tokens = new CSRF(csrfOpts)
 
   const isCookieSigned = cookieOpts?.signed
+
+  if (sessionPlugin === '@fastify/cookie' && !isCookieSigned && !allowUnsignedCookie) {
+    throw new Error(
+      'Cookie mode requires signed cookies: register @fastify/cookie with a secret and set cookieOpts.signed to true, or explicitly set allowUnsignedCookie: true to accept the reduced security of unsigned cookies'
+    )
+  }
+
+  function unsignCsrfCookie (reply, cookieValue) {
+    const unsigned = reply.unsignCookie(cookieValue || '')
+    if (!unsigned.valid) {
+      return null
+    }
+    return unsigned.value
+  }
 
   if (sessionPlugin === '@fastify/secure-session') {
     fastify.decorateReply('generateCsrf', generateCsrfSecureSession)
@@ -73,14 +90,14 @@ async function fastifyCsrfProtection (fastify, opts) {
   } else {
     getSecret = function getSecret (req, reply) {
       return isCookieSigned
-        ? reply.unsignCookie(req.cookies[cookieKey] || '').value
+        ? unsignCsrfCookie(reply, req.cookies[cookieKey])
         : req.cookies[cookieKey]
     }
   }
 
   function generateCsrfCookie (opts) {
     let secret = isCookieSigned
-      ? this.unsignCookie(this.request.cookies[cookieKey] || '').value
+      ? unsignCsrfCookie(this, this.request.cookies[cookieKey])
       : this.request.cookies[cookieKey]
     const userInfo = opts ? opts.userInfo : undefined
     if (!secret) {

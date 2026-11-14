@@ -6,8 +6,8 @@ const fastify = Fastify({
   logger: true
 })
 
-fastify.register(fastifyCookie)
-await fastify.register(fastifyCsrfProtection)
+fastify.register(fastifyCookie, { secret: process.env.COOKIE_SECRET })
+await fastify.register(fastifyCsrfProtection, { cookieOpts: { signed: true } })
 
 fastify.post(
   '/',

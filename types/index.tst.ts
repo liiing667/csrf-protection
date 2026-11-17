@@ -101,3 +101,8 @@ fastify.register(FastifyCsrfProtection, {
   sessionPlugin: '@fastify/secure-session'
 })
 fastify.register(FastifyCsrfProtection, { logLevel: 'info' })
+fastify.register(FastifyCsrfProtection, { verifyOrigin: true })
+
+expect(fastify.register).type.not.toBeCallableWith(FastifyCsrfProtection, {
+  verifyOrigin: 'yes'
+})

@@ -160,6 +160,7 @@ Apart from these safeguards, it is extremely important to [use HTTPS for your we
 | `sessionPlugin` |  The session plugin that you are using (if applicable).     |
 | `csrfOpts` |  The csrf options. See [@fastify/csrf](https://github.com/fastify/csrf).     |
 | `logLevel` | The log level for `fastify.csrfProtection` errors.     |
+| `verifyOrigin` | When `true`, `fastify.csrfProtection` also rejects requests whose `Origin` header does not match the request origin. Default `false`.     |
 
 ### `reply.generateCsrf([opts])`
 
@@ -223,6 +224,27 @@ fastify.register(require('@fastify/csrf-protection'),
   { getToken: (req) => req.headers['csrf-token'] }
 )
 ```
+
+### Origin verification
+
+Set `verifyOrigin: true` to make `fastify.csrfProtection` reject requests whose
+`Origin` header does not match the origin of the request itself:
+
+```js
+fastify.register(require('@fastify/csrf-protection'), { verifyOrigin: true })
+```
+
+The request origin is derived from Fastify's normalized `req.protocol` and
+`req.host`, so when Fastify is configured with
+[`trustProxy`](https://fastify.dev/docs/latest/Reference/Server/#trustproxy)
+the forwarded host and protocol are resolved by the same logic Fastify uses
+for the request itself, and forwarded headers from untrusted clients are
+ignored. Both origins are normalized identically before comparison (casing
+and default ports such as `80` for `http` and `443` for `https` are
+equivalent), so a reverse proxy rewriting ports does not reject legitimate
+requests, while a forged `Origin` with a different host, port, or protocol is
+rejected with a `403` `FST_CSRF_INVALID_ORIGIN` error. Requests without an
+`Origin` header (e.g. non-browser clients) are not affected.
 
 ## License
 

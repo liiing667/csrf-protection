@@ -7,6 +7,7 @@ const createError = require('@fastify/error')
 
 const MissingCSRFSecretError = createError('FST_CSRF_MISSING_SECRET', 'Missing csrf secret', 403)
 const InvalidCSRFTokenError = createError('FST_CSRF_INVALID_TOKEN', 'Invalid csrf token', 403)
+const InvalidCSRFOriginError = createError('FST_CSRF_INVALID_ORIGIN', 'Invalid csrf origin', 403)
 
 const defaultOptions = {
   cookieKey: '_csrf',
@@ -15,6 +16,7 @@ const defaultOptions = {
   getToken: getTokenDefault,
   getUserInfo: getUserInfoDefault,
   sessionPlugin: '@fastify/cookie',
+  verifyOrigin: false,
   logLevel: 'warn'
 }
 
@@ -26,6 +28,7 @@ async function fastifyCsrfProtection (fastify, opts) {
     getToken,
     getUserInfo,
     sessionPlugin,
+    verifyOrigin,
     logLevel
   } = Object.assign({}, defaultOptions, opts)
 
@@ -36,6 +39,7 @@ async function fastifyCsrfProtection (fastify, opts) {
   assert(typeof getToken === 'function', 'getToken should be a function')
   assert(typeof getUserInfo === 'function', 'getUserInfo should be a function')
   assert(typeof cookieOpts === 'object', 'cookieOpts should be a object')
+  assert(typeof verifyOrigin === 'boolean', 'verifyOrigin should be a boolean')
   assert(typeof logLevel === 'string', 'logLevel should be a string')
   assert(
     ['@fastify/cookie', '@fastify/session', '@fastify/secure-session'].includes(sessionPlugin),
@@ -114,6 +118,10 @@ async function fastifyCsrfProtection (fastify, opts) {
   }
 
   function csrfProtection (req, reply, next) {
+    if (verifyOrigin && !isSameOrigin(req)) {
+      req.log[logLevel]('Invalid csrf origin')
+      return reply.send(new InvalidCSRFOriginError())
+    }
     const secret = getSecret(req, reply)
     if (!secret) {
       req.log[logLevel]('Missing csrf secret')
@@ -124,6 +132,31 @@ async function fastifyCsrfProtection (fastify, opts) {
       return reply.send(new InvalidCSRFTokenError())
     }
     next()
+  }
+}
+
+function isSameOrigin (req) {
+  const origin = req.headers.origin
+  if (origin === undefined) {
+    return true
+  }
+  // Both the expected and the actual origin are normalized through the same
+  // URL parsing, so proxy host and port representations (default ports,
+  // casing, forwarded hosts already resolved by Fastify's trustProxy) compare
+  // consistently.
+  const expected = parseOrigin(`${req.protocol}://${req.host}`)
+  const actual = parseOrigin(origin)
+  if (expected === null || actual === null) {
+    return false
+  }
+  return expected.protocol === actual.protocol && expected.host === actual.host
+}
+
+function parseOrigin (value) {
+  try {
+    return new URL(value)
+  } catch {
+    return null
   }
 }
 

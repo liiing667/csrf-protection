@@ -160,6 +160,61 @@ Apart from these safeguards, it is extremely important to [use HTTPS for your we
 | `sessionPlugin` |  The session plugin that you are using (if applicable).     |
 | `csrfOpts` |  The csrf options. See [@fastify/csrf](https://github.com/fastify/csrf).     |
 | `logLevel` | The log level for `fastify.csrfProtection` errors.     |
+| `routePolicies` | Route-level CSRF policies with registration-time validation. See [Route-level policies](#route-level-policies). |
+
+### Route-level policies
+
+The `routePolicies` option registers an encapsulated `onRequest` hook that
+protects **every state-changing route by default** (`DELETE`, `PATCH`, `POST`,
+`PUT` and `QUERY`). Safe methods (`GET`, `HEAD`, `OPTIONS`, `TRACE`) are never
+blocked, as they must not mutate application state.
+
+Each entry describes the policy for a route pattern and is fully validated
+while the plugin is registered. Misconfiguration therefore fails at
+`fastify.ready()`, before the first request is accepted, instead of being
+discovered by the first write request.
+
+| Field | Description |
+| ----------- | ----------- |
+| `url` | The route pattern. Route parameters (`:id`) and wildcards (`*`) are supported, matching the syntax used by Fastify routes. |
+| `method` | A HTTP method string or an array of them. It defaults to every method supported by Fastify when omitted. |
+| `policy` | Either `'require'` (validate the CSRF token, the default for every unlisted state-changing route) or `'exempt'` (skip validation). |
+| `reason` | **Mandatory for `'exempt'` entries.** A non-empty string explaining why the route does not need CSRF protection. It is logged every time the exemption is used, and is not allowed on `'require'` entries. |
+
+```js
+fastify.register(require('@fastify/cookie'))
+fastify.register(require('@fastify/csrf-protection'), {
+  routePolicies: [
+    // login and refresh still require a valid CSRF token
+    { url: '/login', method: 'POST', policy: 'require' },
+    { url: '/refresh', method: 'POST', policy: 'require' },
+    // public webhook authenticated with a signature header instead of a cookie
+    {
+      url: '/webhooks/:provider',
+      method: 'POST',
+      policy: 'exempt',
+      reason: 'public third-party webhook, requests are authenticated with a signature header'
+    }
+  ]
+})
+
+fastify.post('/login', loginHandler)
+fastify.post('/refresh', refreshHandler)
+fastify.post('/webhooks/:provider', webhookHandler)
+// any other state-changing route stays protected without being listed
+fastify.post('/settings', settingsHandler)
+```
+
+Every policy entry must match at least one route registered in the same
+encapsulation context, otherwise `ready()` fails with an explicit error. When
+the plugin is registered inside a prefixed plugin, use the full, prefixed route
+pattern (for example `/api/webhooks/*`).
+
+Exemptions are deliberately explicit: they cannot be declared without a
+`reason`, which is emitted through the configured `logLevel` whenever the route
+is called. The existing `fastify.csrfProtection` hook remains available and
+keeps working exactly as before, and without `routePolicies` no global hook is
+installed, so all previous configurations are unchanged.
 
 ### `reply.generateCsrf([opts])`
 

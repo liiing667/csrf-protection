@@ -101,3 +101,37 @@ fastify.register(FastifyCsrfProtection, {
   sessionPlugin: '@fastify/secure-session'
 })
 fastify.register(FastifyCsrfProtection, { logLevel: 'info' })
+
+fastify.register(FastifyCsrfProtection, {
+  routePolicies: [
+    { url: '/login', method: 'POST', policy: 'require' },
+    { url: '/refresh', method: ['POST', 'PUT'], policy: 'require' },
+    {
+      url: '/webhooks/:provider',
+      method: 'post',
+      policy: 'exempt',
+      reason: 'public third-party webhook verified by signature'
+    },
+    { url: '/everything', policy: 'exempt', reason: 'legacy endpoint removed next release' }
+  ]
+})
+
+expect(fastify.register).type.not.toBeCallableWith(FastifyCsrfProtection, {
+  routePolicies: {}
+})
+
+expect(fastify.register).type.not.toBeCallableWith(FastifyCsrfProtection, {
+  routePolicies: [{ url: '/login', method: 'POST', policy: 'exempt' }]
+})
+
+expect(fastify.register).type.not.toBeCallableWith(FastifyCsrfProtection, {
+  routePolicies: [{ url: '/login', method: 'POST', policy: 'require', reason: 'not allowed' }]
+})
+
+expect(fastify.register).type.not.toBeCallableWith(FastifyCsrfProtection, {
+  routePolicies: [{ url: '/login', method: 'POST', policy: 'disabled' }]
+})
+
+expect(fastify.register).type.not.toBeCallableWith(FastifyCsrfProtection, {
+  routePolicies: [{ method: 'POST', policy: 'require' }]
+})

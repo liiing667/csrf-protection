@@ -1,5 +1,6 @@
 'use strict'
 
+const assert = require('node:assert')
 const { test } = require('node:test')
 const Fastify = require('fastify')
 const fastifyCookie = require('@fastify/cookie')
@@ -186,7 +187,13 @@ test('csrf options', async () => {
     .register(fastifyCookie)
     .register(fastifyCsrf, { csrfOpts })
 
-  sinon.assert.calledWith(csrf, csrfOpts)
+  sinon.assert.calledWithMatch(csrf, { some: 'options', userInfo: false })
+
+  const passedOpts = csrf.firstCall.args[0]
+  assert.notStrictEqual(passedOpts, csrfOpts)
+  assert.deepStrictEqual(passedOpts, { some: 'options', userInfo: false })
+  assert.ok(Object.isFrozen(passedOpts))
+  assert.deepStrictEqual(csrfOpts, { some: 'options' })
 })
 
 const spyLogger = {

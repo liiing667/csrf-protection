@@ -29,8 +29,6 @@ async function fastifyCsrfProtection (fastify, opts) {
     logLevel
   } = Object.assign({}, defaultOptions, opts)
 
-  const csrfOpts = opts?.csrfOpts ? opts.csrfOpts : {}
-
   assert(typeof cookieKey === 'string', 'cookieKey should be a string')
   assert(typeof sessionKey === 'string', 'sessionKey should be a string')
   assert(typeof getToken === 'function', 'getToken should be a function')
@@ -42,15 +40,22 @@ async function fastifyCsrfProtection (fastify, opts) {
     "sessionPlugin should be one of the following: '@fastify/cookie', '@fastify/session', '@fastify/secure-session'"
   )
 
-  if (opts.getUserInfo) {
-    csrfOpts.userInfo = true
+  // Build an instance-owned, frozen copy so the caller's options object is
+  // never mutated. The same csrfOpts reference may be shared across multiple
+  // Fastify instances (e.g. multi-tenant setups), so each registration gets
+  // its own configuration with independent userInfo/hmacKey semantics.
+  // A top-level getUserInfo keeps the legacy behavior of forcing
+  // userInfo: true; otherwise the caller-provided value is preserved.
+  const instanceCsrfOpts = Object.freeze({
+    ...(opts?.csrfOpts ?? {}),
+    userInfo: opts.getUserInfo ? true : (opts.csrfOpts?.userInfo ?? false)
+  })
+
+  if (sessionPlugin === '@fastify/cookie' && instanceCsrfOpts.userInfo) {
+    assert(instanceCsrfOpts.hmacKey, 'csrfOpts.hmacKey is required')
   }
 
-  if (sessionPlugin === '@fastify/cookie' && csrfOpts.userInfo) {
-    assert(csrfOpts.hmacKey, 'csrfOpts.hmacKey is required')
-  }
-
-  const tokens = new CSRF(csrfOpts)
+  const tokens = new CSRF(instanceCsrfOpts)
 
   const isCookieSigned = cookieOpts?.signed
 

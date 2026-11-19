@@ -169,12 +169,20 @@ Generates a secret (if it is not already present) and returns a promise that res
 const token = reply.generateCsrf()
 ```
 
-You can also pass the [cookie serialization](https://github.com/fastify/fastify-cookie) options to the function.
-
 The option `userInfo` is required if `getUserInfo` has been specified in the module option.
 The provided `userInfo` is hashed inside the csrf token and it is not directly exposed.
 This option is needed to protect against cookie tossing.
 The option `csrfOpts.hmacKey` is required if `getUserInfo` has been specified in the module option in combination with using [@fastify/cookie](https://github.com/fastify/fastify-cookie) as sessionPlugin.
+
+The cookie security attributes (`signed`, `secure`, `domain`, `path`, `httpOnly`, `sameSite`, ...)
+are determined exclusively by the `cookieOpts` (or session plugin) options provided at registration
+time. Per-request arguments of `generateCsrf` cannot override them, so a single request cannot make
+the secret cookie diverge from the configuration used by the read side or spread the credential to
+a parent domain. The only supported per-request option is `userInfo`:
+
+```js
+const token = reply.generateCsrf({ userInfo: 'user-specific-info' })
+```
 
 ### `fastify.csrfProtection(request, reply, next)`
 

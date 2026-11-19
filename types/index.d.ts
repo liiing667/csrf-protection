@@ -11,12 +11,12 @@ declare module 'fastify' {
 
   interface FastifyReply {
     /**
-     * Generate a token and configure the secret if needed
-     * @param options Serialize options and userInfo
+     * Generate a token and configure the secret if needed.
+     * Cookie attributes are fixed by the plugin registration options and
+     * cannot be overridden per request; only `userInfo` is accepted here.
+     * @param options userInfo bound to the generated token
      */
-    generateCsrf(
-      options?: fastifyCsrfProtection.CookieSerializeOptions & { userInfo?: string }
-    ): string;
+    generateCsrf(options?: { userInfo?: string }): string;
   }
 }
 

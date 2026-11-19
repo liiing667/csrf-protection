@@ -62,6 +62,82 @@ test('Cookies signed', async t => {
   await runCookieOpts(t, load)
 })
 
+test('generateCsrf cannot override registered cookie security attributes', async t => {
+  await t.test('unsigned cookie: domain, path and attributes stay registered', async t => {
+    const fastify = Fastify()
+    await fastify.register(fastifyCookie)
+    await fastify.register(fastifyCsrf, {
+      cookieOpts: { path: '/', sameSite: true, httpOnly: true, domain: 'example.com' }
+    })
+
+    fastify.get('/', async (_req, reply) => {
+      return { token: reply.generateCsrf({ domain: 'evil.example', path: '/parent', secure: true }) }
+    })
+
+    const response = await fastify.inject({ method: 'GET', path: '/' })
+
+    const cookie = response.cookies[0]
+    t.assert.strictEqual(cookie.domain, 'example.com')
+    t.assert.strictEqual(cookie.path, '/')
+    t.assert.notStrictEqual(cookie.secure, true)
+    t.assert.strictEqual(cookie.httpOnly, true)
+  })
+
+  await t.test('signed cookie: per-call signed:false cannot strip the signature', async t => {
+    const fastify = Fastify()
+    await fastify.register(fastifyCookie, { secret: 'supersecret' })
+    await fastify.register(fastifyCsrf, { cookieOpts: { signed: true, path: '/', domain: 'example.com' } })
+
+    fastify.get('/', async (_req, reply) => {
+      return { token: reply.generateCsrf({ signed: false, domain: 'evil.example', path: '/parent' }) }
+    })
+    fastify.post('/', { preValidation: fastify.csrfProtection }, async (req) => {
+      return req.body
+    })
+
+    const response = await fastify.inject({ method: 'GET', path: '/' })
+
+    const cookie = response.cookies[0]
+    t.assert.strictEqual(cookie.domain, 'example.com')
+    t.assert.strictEqual(cookie.path, '/')
+    t.assert.ok(cookie.value.includes('.'), 'the secret cookie must remain signed')
+
+    const second = await fastify.inject({
+      method: 'GET',
+      path: '/',
+      cookies: { [cookie.name]: cookie.value }
+    })
+    t.assert.strictEqual(second.cookies[0], undefined, 'the original secret must still be found')
+
+    const protectedResponse = await fastify.inject({
+      method: 'POST',
+      path: '/',
+      payload: { hello: 'world', _csrf: response.json().token },
+      cookies: { [cookie.name]: cookie.value }
+    })
+    t.assert.strictEqual(protectedResponse.statusCode, 200)
+    t.assert.strictEqual(protectedResponse.json().hello, 'world')
+  })
+})
+
+test('Secure session options cannot be overridden by generateCsrf', async t => {
+  const fastify = Fastify()
+  await fastify.register(fastifySecureSession, { key, cookie: { path: '/', secure: false } })
+  await fastify.register(fastifyCsrf, { sessionPlugin: '@fastify/secure-session' })
+
+  fastify.get('/', async (_req, reply) => {
+    return { token: reply.generateCsrf({ path: '/parent', domain: 'evil.example', httpOnly: false }) }
+  })
+
+  const response = await fastify.inject({ method: 'GET', path: '/' })
+
+  const cookie = response.cookies[0]
+  t.assert.strictEqual(cookie.name, 'session')
+  t.assert.strictEqual(cookie.path, '/')
+  t.assert.strictEqual(cookie.domain, undefined)
+  t.assert.strictEqual(cookie.httpOnly, true)
+})
+
 test('Fastify Session', async t => {
   async function load () {
     const fastify = Fastify()
@@ -372,11 +448,18 @@ async function runtTest (t, load, tkn, hook = 'onRequest') {
 }
 
 async function runCookieOpts (t, load) {
-  await t.test('Custom cookie options', async t => {
+  await t.test('generateCsrf options cannot override registered cookie options', async t => {
     const fastify = await load()
+    const override = {
+      path: '/hello',
+      domain: 'evil.example',
+      secure: true,
+      httpOnly: false,
+      sameSite: 'none'
+    }
 
     fastify.get('/', async (_req, reply) => {
-      const token = reply.generateCsrf({ path: '/hello' })
+      const token = reply.generateCsrf(override)
       return { token }
     })
 
@@ -386,6 +469,10 @@ async function runCookieOpts (t, load) {
     })
 
     const cookie = response.cookies[0]
-    t.assert.strictEqual(cookie.path, '/hello')
+    t.assert.notStrictEqual(cookie.path, override.path)
+    t.assert.notStrictEqual(cookie.domain, override.domain)
+    t.assert.notStrictEqual(cookie.secure, override.secure)
+    t.assert.notStrictEqual(cookie.httpOnly, override.httpOnly)
+    t.assert.notStrictEqual(cookie.sameSite, override.sameSite)
   })
 }

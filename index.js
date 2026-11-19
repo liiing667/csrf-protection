@@ -85,7 +85,7 @@ async function fastifyCsrfProtection (fastify, opts) {
     const userInfo = opts ? opts.userInfo : undefined
     if (!secret) {
       secret = tokens.secretSync()
-      this.setCookie(cookieKey, secret, Object.assign({}, cookieOpts, opts))
+      this.setCookie(cookieKey, secret, cookieOpts)
     }
     return tokens.create(secret, userInfo)
   }
@@ -97,9 +97,6 @@ async function fastifyCsrfProtection (fastify, opts) {
       this.request.session.set(sessionKey, secret)
     }
     const userInfo = opts ? opts.userInfo : undefined
-    if (opts) {
-      this.request.session.options(opts)
-    }
     return tokens.create(secret, userInfo)
   }
 

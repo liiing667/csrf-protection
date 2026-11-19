@@ -7,6 +7,16 @@ const createError = require('@fastify/error')
 
 const MissingCSRFSecretError = createError('FST_CSRF_MISSING_SECRET', 'Missing csrf secret', 403)
 const InvalidCSRFTokenError = createError('FST_CSRF_INVALID_TOKEN', 'Invalid csrf token', 403)
+const InvalidCSRFSecretError = createError('FST_CSRF_INVALID_SECRET', 'Invalid csrf secret', 403)
+
+const MIN_SECRET_LENGTH = 16
+const MAX_SECRET_LENGTH = 256
+
+function isValidSecret (secret) {
+  return typeof secret === 'string' &&
+    secret.length >= MIN_SECRET_LENGTH &&
+    secret.length <= MAX_SECRET_LENGTH
+}
 
 const defaultOptions = {
   cookieKey: '_csrf',
@@ -64,35 +74,62 @@ async function fastifyCsrfProtection (fastify, opts) {
 
   fastify.decorate('csrfProtection', csrfProtection)
 
-  let getSecret
+  let readSecret
 
   if (sessionPlugin === '@fastify/secure-session') {
-    getSecret = function getSecret (req, _reply) { return req.session.get(sessionKey) }
+    readSecret = function readSecret (req, _reply) {
+      if (!Object.hasOwn(req.session.data(), sessionKey)) {
+        return undefined
+      }
+      return req.session.get(sessionKey)
+    }
   } else if (sessionPlugin === '@fastify/session') {
-    getSecret = function getSecret (req, _reply) { return req.session[sessionKey] }
+    readSecret = function readSecret (req, _reply) {
+      if (!Object.hasOwn(req.session, sessionKey)) {
+        return undefined
+      }
+      return req.session[sessionKey]
+    }
   } else {
-    getSecret = function getSecret (req, reply) {
+    readSecret = function readSecret (req, reply) {
       return isCookieSigned
         ? reply.unsignCookie(req.cookies[cookieKey] || '').value
         : req.cookies[cookieKey]
     }
   }
 
+  function getSecret (req, reply) {
+    const secret = readSecret(req, reply)
+    if (secret === undefined || secret === null || secret === '') {
+      return { missing: true }
+    }
+    if (!isValidSecret(secret)) {
+      return { invalid: true }
+    }
+    return { secret }
+  }
+
   function generateCsrfCookie (opts) {
-    let secret = isCookieSigned
-      ? this.unsignCookie(this.request.cookies[cookieKey] || '').value
-      : this.request.cookies[cookieKey]
-    const userInfo = opts ? opts.userInfo : undefined
-    if (!secret) {
+    const { secret: storedSecret, missing, invalid } = getSecret(this.request, this)
+    if (invalid) {
+      throw new InvalidCSRFSecretError()
+    }
+    let secret = storedSecret
+    if (missing) {
       secret = tokens.secretSync()
       this.setCookie(cookieKey, secret, Object.assign({}, cookieOpts, opts))
     }
+    const userInfo = opts ? opts.userInfo : undefined
     return tokens.create(secret, userInfo)
   }
 
   function generateCsrfSecureSession (opts) {
-    let secret = this.request.session.get(sessionKey)
-    if (!secret) {
+    const { secret: storedSecret, missing, invalid } = getSecret(this.request, this)
+    if (invalid) {
+      throw new InvalidCSRFSecretError()
+    }
+    let secret = storedSecret
+    if (missing) {
       secret = tokens.secretSync()
       this.request.session.set(sessionKey, secret)
     }
@@ -104,18 +141,26 @@ async function fastifyCsrfProtection (fastify, opts) {
   }
 
   function generateCsrfSession (opts) {
-    let secret = this.request.session[sessionKey]
-    const userInfo = opts ? opts.userInfo : undefined
-    if (!secret) {
+    const { secret: storedSecret, missing, invalid } = getSecret(this.request, this)
+    if (invalid) {
+      throw new InvalidCSRFSecretError()
+    }
+    let secret = storedSecret
+    if (missing) {
       secret = tokens.secretSync()
       this.request.session[sessionKey] = secret
     }
+    const userInfo = opts ? opts.userInfo : undefined
     return tokens.create(secret, userInfo)
   }
 
   function csrfProtection (req, reply, next) {
-    const secret = getSecret(req, reply)
-    if (!secret) {
+    const { secret, missing, invalid } = getSecret(req, reply)
+    if (invalid) {
+      req.log[logLevel]('Invalid csrf secret')
+      return reply.send(new InvalidCSRFSecretError())
+    }
+    if (missing) {
       req.log[logLevel]('Missing csrf secret')
       return reply.send(new MissingCSRFSecretError())
     }
